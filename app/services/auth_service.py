@@ -1,42 +1,62 @@
+import httpx
+import logging
 from typing import Optional
+from fastapi import Depends, Header, HTTPException
+from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_200_OK
 from sqlalchemy.orm import Session
-from fastapi import Depends
-from authlib.integrations.starlette_client import OAuthError
-from starlette.requests import Request
-from starlette.responses import JSONResponse
+from dotenv import load_dotenv
+import os
 
-from core import security
-from database import get_db
-from repository import user_repository
-from models import User
+load_dotenv(".oauth_env")
+
+from core.security import validate_jwt_token
+from core.config import settings
+from repository import token_repository
+from models import get_db
 
 
-class AuthService:
-    def __init__(self, oauth):
-        self.oauth = oauth
+logger = logging.getLogger(__name__)
 
-    async def authorize_redirect(self, request: Request, redirect_uri: str):
-        return await self.oauth.google.authorize_redirect(request, redirect_uri)
-
-    async def authorize_access_token(self, request: Request) -> Optional[dict]:
+async def authenticate_user(auth_token: str) -> Optional[dict]:
+    url = f'{settings.GOOGLE_OAUTH_API}={auth_token}'
+    async with httpx.AsyncClient() as client:
         try:
-            token = await self.oauth.google.authorize_access_token(request)
-            user = token.get('userinfo')
-            return dict(user) if user else None
-        except OAuthError as e:
-            raise e
-# {"iss": "https://accounts.google.com", "azp": "174594637674-ne7lnol93jd9csrv85ss974rpgaipvet.apps.googleusercontent.com", "aud": "174594637674-ne7lnol93jd9csrv85ss974rpgaipvet.apps.googleusercontent.com", "sub": "107913324862626044178", "email": "notkamalkishor@gmail.com", "email_verified": true, "at_hash": "Yx_fkByqjoHtSkQkT4VbWA", "nonce": "JbAC2ivWCUMK3OZ5Tozf", "name": "Kamal Kishor", "picture": "https://lh3.googleusercontent.com/a/ACg8ocKTPZwiWm7GiADn6QUIngfBtvDMQJu0GVo-BvWABywFEiPeahg=s96-c", "given_name": "Kamal", "family_name": "Kishor", "iat": 1712986106, "exp": 1712989706}
-
-    def success_response(self, user: dict, db: Session = Depends(get_db)):
-        existing_user = user_repository.get_user_by_email(user['email'])
-        access_token = security.create_access_token(user['sub'], user['exp'])
-        if existing_user:
-            return {"access_token": access_token}
+            response = await client.get(url)
+            if response.status_code == HTTP_200_OK:
+                user_data = response.json()
+                return dict(user_data) if user_data else None
+            else:
+                return None
+        except httpx.RequestError as exc:
+            logger.error(exc)
+            return None
         
-        new_user = User(
-            name=user['name'],
-            email=user['email'],
-            picture=user['picture']
-        )
-        user_repository.create_user(db, new_user)
-        return {"access_token": access_token}
+async def get_access_token(access_token: Optional[str] = Header(None)):
+    if not access_token or not access_token.startswith("Bearer "):
+        logger.error("Either access token not passed or it doesn't start with Bearer.")
+        raise HTTPException(status_code=401, detail="Invalid access token")
+    
+    return access_token.split("Bearer ")[1]
+
+async def authorize_access_token(
+    db: Session = Depends(get_db),
+    access_token: str = Depends(get_access_token)
+):
+    user_id = await validate_jwt_token(access_token)
+    if not user_id:
+        logger.error("User doesn't exist.")
+        raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="Unauthorized user")
+    
+    token_in_db = token_repository.find_token(db=db, user_id=user_id).token
+    if token_in_db != access_token:
+        logger.error("Token doesn't match with one present in database.")
+        raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="Unauthorized user")
+    
+    return user_id
+
+async def validate_google_client_id(client_id: str) -> bool:
+    if client_id == os.getenv("GOOGLE_CLIENT_ID"):
+        return True
+    
+    logger.error("Invalid Google Client ID.")
+    return False

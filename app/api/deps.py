@@ -1,10 +1,10 @@
-from fastapi.security import OAuth2PasswordBearer, Oauth2
+from fastapi import Depends
+from typing import Annotated
+from models import get_db
+from sqlalchemy.orm import Session
+from fastapi import Depends
 
+from services.auth_service import authorize_access_token
 
-# need to read about security in fastapi
-# need read about either pydantic or sqlmodel
-# If I understand how security works in fastapi application then only I can figure out how can I use google auth for authentication and jwt tokens for authorization
-# If I undestand about sqlmodel or pydantic then it would be easy for me to handle data & interact with db
-reusable_oauth2 = OAuth2PasswordBearer(
-    tokenUrl=f"token"
-)
+SessionDep = Annotated[Session, Depends(get_db)]
+CurrentUserDep = Annotated[str, Depends(authorize_access_token)]

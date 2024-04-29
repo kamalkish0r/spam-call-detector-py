@@ -13,7 +13,6 @@ import os
 app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 app.include_router(api_router)
-app.add_middleware(SessionMiddleware, secret_key=os.getenv('SECRET_KEY'))
 
 
 @app.get('/')

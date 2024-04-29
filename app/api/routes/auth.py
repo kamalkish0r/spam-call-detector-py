@@ -1,72 +1,51 @@
 import logging
-from typing import Optional
-
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Header, Query, Depends
 from starlette.responses import RedirectResponse
 from starlette.status import HTTP_401_UNAUTHORIZED
+from datetime import timedelta
 
-from services.auth_service import AuthService
-from core.config import oauth
+from services import auth_service 
+from schemas.auth import LoginRequest, TokenResponse
+from repository import user_repository, token_repository
+from core.security import create_jwt_token
+from api.deps import SessionDep, CurrentUserDep
 
 router = APIRouter()
-auth_service = AuthService(oauth)
+logger = logging.getLogger(__name__)
 
-@router.get('/login')
-async def login_via_google(request: Request):
-    """
-    Initiate the Google authentication flow by redirecting the user to the Google login page.
 
-    Args:
-        request (Request): The incoming request object.
+@router.post('/login', response_model=TokenResponse)
+async def login_via_google(
+    db : SessionDep,
+    request: LoginRequest
+):
+    user_data = await auth_service.authenticate_user(request.authToken)
 
-    Returns:
-        RedirectResponse: A redirect response to the Google login page.
-    """
-    redirect_uri = request.url_for('auth_via_google')
-    return await auth_service.authorize_redirect(request, redirect_uri)
-
-@router.get('/auth')
-async def auth_via_google(request: Request):
-    """
-    Handle the Google authentication callback and retrieve the user information.
-
-    Args:
-        request (Request): The incoming request object.
-
-    Returns:
-        JSONResponse: A JSON response containing the user information or an error message.
-    """
-    try:
-        user = await auth_service.authorize_access_token(request)
-        if user:
-            user = auth_service.success_response(user)
-            request.session['user'] = user
-            return user
-        else:
-            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="Failed to get user information")
-    except Exception as e:
-        logging.error(f"Authentication error: {e}")
-        raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(e))
+    if user_data:
+        if not await auth_service.validate_google_client_id(user_data['aud']):
+            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="User not authenticated")
+        
+        user = user_repository.get_or_create_user(db=db, user_dict=user_data)
+        access_token = await create_jwt_token(subject=user.id, expire_delta=timedelta(days=15))
+        token_repository.add_or_update_token(db=db, token=access_token, user_id=user.id)
+        return {"token": access_token}
+    else:
+        HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="User not authenticated")
 
 @router.get("/profile")
-async def get_user_details(request: Request):
-    """
-    Retrieve the authenticated user's details.
+async def get_user_data(
+    db: SessionDep,
+    user_id: CurrentUserDep
+):
+    logger.debug(f"find details of user : {user_id}")
+    return user_repository.get_user_by_id(db=db, user_id=user_id)
 
-    Args:
-        request (Request): The incoming request object.
-
-    Returns:
-        JSONResponse: A JSON response containing the user details or an error message.
-    """
-    user = request.session.get('user')
-    if user:
-        return auth_service.success_response(user)
-    else:
-        raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="User not authenticated")
 
 @router.get('/logout')
-async def logout(request: Request):
+async def logout(
+    db: SessionDep,
+    user_id: str = CurrentUserDep
+):
     """
     Log out the authenticated user by clearing the session.
 
@@ -76,5 +55,4 @@ async def logout(request: Request):
     Returns:
         RedirectResponse: A redirect response to the root URL.
     """
-    request.session.pop('user', None)
     return RedirectResponse(url='/')
