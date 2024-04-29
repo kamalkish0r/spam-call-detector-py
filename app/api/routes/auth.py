@@ -19,6 +19,7 @@ async def login_via_google(
     db : SessionDep,
     request: LoginRequest
 ):
+    # Todo : handle 400 bad request when expired authToken is passed to google
     user_data = await auth_service.authenticate_user(request.authToken)
 
     if user_data:
@@ -32,27 +33,13 @@ async def login_via_google(
     else:
         HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="User not authenticated")
 
-@router.get("/profile")
-async def get_user_data(
-    db: SessionDep,
-    user_id: CurrentUserDep
-):
-    logger.debug(f"find details of user : {user_id}")
-    return user_repository.get_user_by_id(db=db, user_id=user_id)
-
 
 @router.get('/logout')
 async def logout(
     db: SessionDep,
     user_id: str = CurrentUserDep
 ):
-    """
-    Log out the authenticated user by clearing the session.
-
-    Args:
-        request (Request): The incoming request object.
-
-    Returns:
-        RedirectResponse: A redirect response to the root URL.
-    """
-    return RedirectResponse(url='/')
+    # Todo : better handling
+    if token_repository.revoke_token(db=db, token="", user_id=user_id):
+        return {"status": "Success : Logged out"}
+    return HTTPException(HTTP_401_UNAUTHORIZED, detail="User not authorised")

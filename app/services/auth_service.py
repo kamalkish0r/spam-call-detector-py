@@ -2,7 +2,7 @@ import httpx
 import logging
 from typing import Optional
 from fastapi import Depends, Header, HTTPException
-from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_200_OK
+from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_200_OK 
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 import os
@@ -60,3 +60,9 @@ async def validate_google_client_id(client_id: str) -> bool:
     
     logger.error("Invalid Google Client ID.")
     return False
+
+async def handle_logout(db: Session, user_id):
+    """
+    Remove the token 
+    """
+    return token_repository.revoke_token(db=db, user_id=user_id)
