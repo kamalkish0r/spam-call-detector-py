@@ -40,6 +40,6 @@ async def logout(
     user_id: str = CurrentUserDep
 ):
     # Todo : better handling
-    if token_repository.revoke_token(db=db, token="", user_id=user_id):
+    if auth_service.handle_logout(db=db, user_id=user_id):
         return {"status": "Success : Logged out"}
     return HTTPException(HTTP_401_UNAUTHORIZED, detail="User not authorised")

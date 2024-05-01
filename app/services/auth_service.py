@@ -61,7 +61,7 @@ async def validate_google_client_id(client_id: str) -> bool:
     logger.error("Invalid Google Client ID.")
     return False
 
-async def handle_logout(db: Session, user_id):
+async def handle_logout(db: Session, user_id) -> bool:
     """
     Remove the token 
     """
