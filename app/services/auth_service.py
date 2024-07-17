@@ -4,10 +4,7 @@ from typing import Optional
 from fastapi import Depends, Header, HTTPException
 from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_200_OK 
 from sqlalchemy.orm import Session
-from dotenv import load_dotenv
 import os
-
-load_dotenv(".oauth_env")
 
 from core.security import validate_jwt_token
 from core.config import settings
@@ -26,9 +23,10 @@ async def authenticate_user(auth_token: str) -> Optional[dict]:
                 user_data = response.json()
                 return dict(user_data) if user_data else None
             else:
+                logger.error("Error while fetching user details from Google.")
                 return None
         except httpx.RequestError as exc:
-            logger.error(exc)
+            logger.error(f"Error while fetching user details from Google : {str(exc)}")
             return None
         
 async def get_access_token(access_token: Optional[str] = Header(None)):
@@ -62,7 +60,4 @@ async def validate_google_client_id(client_id: str) -> bool:
     return False
 
 async def handle_logout(db: Session, user_id) -> bool:
-    """
-    Remove the token 
-    """
     return token_repository.revoke_token(db=db, user_id=user_id)

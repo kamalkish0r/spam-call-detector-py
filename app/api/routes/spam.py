@@ -1,38 +1,37 @@
 import logging
-from fastapi import APIRouter, Request
-from models import get_db
+from fastapi import APIRouter, HTTPException
+from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
-from sqlalchemy.orm import Session
-from fastapi import Depends
-from services import spam_service
-from schemas.spam import SpamStatus, MarkSpamResponse
 from api.deps import SessionDep, CurrentUserDep
+from schemas.spam import SpamStatus, MarkSpamResponse, PhoneNumber
+from services import spam_service
 
 router = APIRouter(prefix="/contact-detail")
 logger = logging.getLogger(__name__)
 
 
-@router.put("/{contact_number}")
+@router.put("/mark_spam", response_model=MarkSpamResponse)
 async def mark_as_spam(
-    contact_number: str,
+    contact_number: PhoneNumber,
     db: SessionDep,
     user_id: CurrentUserDep
 ) -> MarkSpamResponse:
     try:
-        spam_service.report_spam(db=db, spam_number=contact_number, reporter_id=int(user_id))
-        return {'status': 'success'}
+        spam_service.report_spam(db=db, spam_number=contact_number.number, reporter_id=int(user_id))
+        return MarkSpamResponse(status='success')
     except Exception as e:
-        logger.error(e)
-        return {'status': 'failure'}
-    
+        logger.error(f"Error while marking {contact_number.number} as spam by user {user_id}: {str(e)}")
+        raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail="Error while marking number as spam.")
 
-@router.get("/{contact_number}")
+@router.post("/spam_status")
 async def get_spam_stutus(
-    contact_number: str, 
+    contact_number: PhoneNumber, 
     db: SessionDep,
-    user_id: CurrentUserDep
+    current_user: CurrentUserDep
 ) -> SpamStatus:
-    status = spam_service.is_spam(db=db, number=contact_number)
-    if status:
-        return {"spam": True}
-    return {"spam": False}
+    try:
+        status = spam_service.is_spam(db=db, number=contact_number.number)
+        return SpamStatus(spam=status)
+    except Exception as e:
+        logger.error(f"Error while fetching spam status for number {contact_number.number} : {str(e)}")
+        raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail="Error while fetching spam status.") # todo : remove exact error and provide generic error
