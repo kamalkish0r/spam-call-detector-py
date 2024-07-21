@@ -21,7 +21,7 @@ app = FastAPI(lifespan=lifespan)
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+    format='%(levelname)s %(asctime)s - %(pathname)s:%(lineno)d - %(message)s'
 )
 
 app.include_router(api_router)
