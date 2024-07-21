@@ -1,14 +1,18 @@
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from fastapi_limiter.depends import RateLimiter
 
 from api.deps import SessionDep, CurrentUserDep
 from services import user_service
+from core.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/profile")
+
+@router.get("/profile", dependencies=[Depends(
+    RateLimiter(times=settings.MAX_GET_PROFILE_DETAILS_COUNT, seconds=settings.RATE_LIMITING_SECONDS))])
 async def get_user_data(
     db: SessionDep,
     user_id: CurrentUserDep
