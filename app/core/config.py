@@ -8,12 +8,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str = os.getenv('SECRET_KEY', '')
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     ALGORITHM: str = "HS256"
+    GOOGLE_OAUTH_API: str = "https://oauth2.googleapis.com/tokeninfo?id_token"
+    GOOGLE_CLIENT_ID: str = os.getenv('GOOGLE_CLIENT_ID', '')
 
     # Database settings
     SQLALCHEMY_DATABASE_URI: str = os.getenv('DATABASE_URL', "sqlite:///./sql_app.db")
-
-    # API settings
-    GOOGLE_OAUTH_API: str = "https://oauth2.googleapis.com/tokeninfo?id_token"
 
     # Rate limiting settings
     MAX_LOGIN_REQUEST_COUNT: int = int(os.getenv('MAX_LOGIN_REQUEST_COUNT', '2')) 
@@ -25,6 +24,9 @@ class Settings(BaseSettings):
 
     # Redis settings
     REDIS_URL: str = os.getenv('REDIS_URL', "redis://127.0.0.1:6379")
+
+    # Spam count threshold
+    SPAM_REPPORT_THRESHOLD: int = int(os.getenv('SPAM_REPPORT_THRESHOLD', '100'))
 
     def dict(self) -> Dict[str, Any]:
         return {k: v for k, v in self.__dict__.items() if not k.startswith('_')}

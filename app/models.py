@@ -37,7 +37,6 @@ class Token(Base):
     def __repr__(self):
         return f'Token(id={self.id}, token={self.token}, user_id={self.user_id})'    
     
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 engine = create_engine(settings.SQLALCHEMY_DATABASE_URI)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
